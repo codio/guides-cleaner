@@ -10,6 +10,7 @@ import (
 
 func printHelp() {
 	fmt.Println("Usage:")
+	fmt.Println("guides-cleaner clean-content <path>")
 	os.Exit(1)
 }
 
