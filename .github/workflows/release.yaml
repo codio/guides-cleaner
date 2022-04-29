@@ -1,8 +1,6 @@
 name: Publish New Release
 on:
   create:
-    branches:    
-      - master
     tags:
       - 'v*'
 
