@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -47,8 +46,7 @@ func loadSections(path string) ([]Section, error) {
 	}
 	defer jsonFile.Close()
 
-	bytes, _ := ioutil.ReadAll(jsonFile)
-
+	bytes, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
 		return nil, err
 	}
@@ -69,24 +67,23 @@ func cleanAssessments(path string) error {
 	}
 	defer jsonFile.Close()
 
-	bytes, _ := ioutil.ReadAll(jsonFile)
-
+	bytes, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
 		return err
 	}
 	if err := json.Unmarshal(bytes, &root); err != nil {
-    	log.Fatal(err)
+    	return err
 	}
 	var dst []interface{}
 
 	for _, value := range root {
 		node, ok := value.(map[string]interface{})
 		if !ok {
-			log.Fatalf("Error clean assessment.json")
+			return fmt.Errorf("error clean assessment.json")
 		}
 		taskId, ok := node["taskId"].(string)
 		if !ok {
-			log.Fatal("Error fetch taskId")
+			return fmt.Errorf("error fetch taskId")
 		}
 		if (assessmentMap[taskId]) {
 			dst = append(dst, value)
@@ -94,11 +91,12 @@ func cleanAssessments(path string) error {
 	}
 	
 	data, err := json.MarshalIndent(dst, "", " ")
-	check(err)
+	if err != nil {
+		return err
+	}
 	jsonFile.Truncate(0)
 	jsonFile.Seek(0, 0)
 	jsonFile.Write(data)
-
 	return nil
 }
 
@@ -169,23 +167,33 @@ func checkFilesContent(rootPath string, paths []string, includeAssessments bool)
 	return nil
 }
 
-func checkDirectory(pathToDirectory string, includeAssessments bool) {
+func checkDirectory(pathToDirectory string, includeAssessments bool) error {
   files, err := ioutil.ReadDir(pathToDirectory)
   if err != nil {
-    log.Fatal(err)
+    return err
   }
   for _, file := range files {
     pathToFile := pathToDirectory + "/" + file.Name()
     if file.IsDir() {
-      checkDirectory(pathToFile, includeAssessments)
+      err = checkDirectory(pathToFile, includeAssessments)
+	  if err != nil {
+		return err
+	  }
     } else {
-      checkFile(pathToFile, includeAssessments)
+      err = checkFile(pathToFile, includeAssessments)
+	  if err != nil {
+		return err
+	  }
     }
   }
+  return nil
 }
 
-func checkFile(pathToFile string, includeAssessments bool) {
-	content := readFile(pathToFile)
+func checkFile(pathToFile string, includeAssessments bool) error {
+	content, err := readFile(pathToFile)
+	if err != nil {
+		return err
+	}
 
 	re := regexp.MustCompile(file_search_dict)
 	matches := re.FindAllString(content, -1)
@@ -203,14 +211,15 @@ func checkFile(pathToFile string, includeAssessments bool) {
 			assessmentMap[v[taskIdIndex]] = true
 		}
 	}
+	return nil
 }
 
-func readFile(pathToFile string) string {
+func readFile(pathToFile string) (string, error) {
 	data, err := ioutil.ReadFile(pathToFile)
 	if err != nil {
-	  log.Println(err)
+	  return "", err
 	}
-	return string(data)
+	return string(data), nil
   }
 
 func cleanContent(path string) (bool, error) {
@@ -240,10 +249,22 @@ func getCodePath(projectPath string) string {
 }
 
 func mergeAssignments(destAssignmentPath string, mergeAssignmentPath string) error {
-	mergeAssessmentsJson(destAssignmentPath, mergeAssignmentPath)
-	mergeJson(destAssignmentPath, mergeAssignmentPath, ".guides/metadata.json", "sections")
-	mergeJson(destAssignmentPath, mergeAssignmentPath, ".guides/book.json", "children")
-	copyFiles(destAssignmentPath, mergeAssignmentPath)
+	err := mergeAssessmentsJson(destAssignmentPath, mergeAssignmentPath)
+	if err != nil {
+		return err
+	}
+	err = mergeJson(destAssignmentPath, mergeAssignmentPath, ".guides/metadata.json", "sections")
+	if err != nil {
+		return err
+	}
+	err = mergeJson(destAssignmentPath, mergeAssignmentPath, ".guides/book.json", "children")
+	if err != nil {
+		return err
+	}
+	err = copyFiles(destAssignmentPath, mergeAssignmentPath)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -277,13 +298,12 @@ func mergeAssessmentsJson(destAssignmentPath string, mergeAssignmentPath string)
 	}
 	defer mergeFile.Close()
 
-	bytes, _ := ioutil.ReadAll(mergeFile)
-
+	bytes, err := ioutil.ReadAll(mergeFile)
 	if err != nil {
 		return err
 	}
 	if err := json.Unmarshal(bytes, &mergeJson); err != nil {
-    	log.Fatal(err)
+    	return err
 	}
 
 	var dstJson []interface{}
@@ -294,20 +314,19 @@ func mergeAssessmentsJson(destAssignmentPath string, mergeAssignmentPath string)
 	}
 	defer dstFile.Close()
 
-	bytes, _ = ioutil.ReadAll(dstFile)
-
+	bytes, err = ioutil.ReadAll(dstFile)
 	if err != nil {
 		return err
 	}
 	if err := json.Unmarshal(bytes, &dstJson); err != nil {
-    	log.Fatal(err)
+    	return err
 	}
 
 	dstIds := []string{}
 	for _, val := range dstJson {
 		node, ok := val.(map[string]interface{})
 		if !ok {
-			log.Fatalf("Error processing file: %s", dstFilePath)
+			return fmt.Errorf("error processing file: %s", dstFilePath)
 		}
 		id, ok := node["taskId"].(string)
 		if ok {
@@ -318,7 +337,7 @@ func mergeAssessmentsJson(destAssignmentPath string, mergeAssignmentPath string)
 	for _, val := range mergeJson {
 		node, ok := val.(map[string]interface{})
 		if !ok {
-			log.Fatalf("Error processing file: %s", mergeFilePath)
+			return fmt.Errorf("error processing file: %s", mergeFilePath)
 		}
 		id, ok := node["taskId"].(string)
 		if ok && !containedInArray(dstIds, id){
@@ -327,18 +346,27 @@ func mergeAssessmentsJson(destAssignmentPath string, mergeAssignmentPath string)
 	}
 	
 	data, err := json.MarshalIndent(dstJson, "", " ")
-	check(err)
+	if err != nil {
+		return err
+	}
 	dstFile.Truncate(0)
 	dstFile.Seek(0, 0)
 	dstFile.Write(data)
 	return nil
 }
 
-func mergeJson(destAssignmentPath, mergeAssignmentPath, relativPathToFile, processedRecord string) {
+func mergeJson(destAssignmentPath, mergeAssignmentPath, relativPathToFile, processedRecord string) error {
 	pathToDest := filepath.Join(destAssignmentPath, relativPathToFile)
 	pathToMerge := filepath.Join(mergeAssignmentPath, relativPathToFile)
-	arr, _ := getMergeArray(pathToMerge, processedRecord)
-	mergeIntoDst(pathToDest, processedRecord, arr)
+	arr, err := getMergeArray(pathToMerge, processedRecord)
+	if err != nil {
+		return err
+	}
+	err = mergeIntoDst(pathToDest, processedRecord, arr)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func getMergeArray(pathToFile string, key string) ([]interface{}, error) {
@@ -349,18 +377,17 @@ func getMergeArray(pathToFile string, key string) ([]interface{}, error) {
 	}
 	defer jsonFile.Close()
 
-	bytes, _ := ioutil.ReadAll(jsonFile)
-
+	bytes, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(bytes, &root); err != nil {
-    	log.Fatal(err)
+    	return nil, err
 	}
 
 	records, ok := root.(map[string]interface{})
 	if !ok {
-		log.Fatalf("Error processing file: %s", pathToFile)
+		return nil, fmt.Errorf("error processing file: %s", pathToFile)
 	}
 	out, ok := records[key].([]interface{})
 	if ok {
@@ -378,18 +405,17 @@ func mergeIntoDst(pathToFile string, key string, mergeArr []interface{}) error {
 	}
 	defer jsonFile.Close()
 
-	bytes, _ := ioutil.ReadAll(jsonFile)
-
+	bytes, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
 		return err
 	}
 	if err := json.Unmarshal(bytes, &root); err != nil {
-    	log.Fatal(err)
+    	return err
 	}
 
 	records, ok := root.(map[string]interface{})
 	if !ok {
-		log.Fatalf("Error processing file: %s", pathToFile)
+		return fmt.Errorf("error processing file: %s", pathToFile)
 	}
 
 	var srcRecord []interface{}
@@ -402,7 +428,7 @@ func mergeIntoDst(pathToFile string, key string, mergeArr []interface{}) error {
 	for _, val := range srcRecord {
 		node, ok := val.(map[string]interface{})
 		if !ok {
-			log.Fatalf("Error processing file: %s", pathToFile)
+			return fmt.Errorf("error processing file: %s", pathToFile)
 		}
 		id, ok := node["id"].(string)
 		if ok {
@@ -413,7 +439,7 @@ func mergeIntoDst(pathToFile string, key string, mergeArr []interface{}) error {
 	for _, val := range mergeArr {
 		node, ok := val.(map[string]interface{})
 		if !ok {
-			log.Fatalf("Error processing file: %s", pathToFile)
+			return fmt.Errorf("error processing file: %s", pathToFile)
 		}
 		id, ok := node["id"].(string)
 		if ok && !containedInArray(srcIds, id){
@@ -424,11 +450,12 @@ func mergeIntoDst(pathToFile string, key string, mergeArr []interface{}) error {
 	records[key] = srcRecord
 	
 	data, err := json.MarshalIndent(root, "", " ")
-	check(err)
+	if err != nil {
+		return err
+	}
 	jsonFile.Truncate(0)
 	jsonFile.Seek(0, 0)
 	jsonFile.Write(data)
-
 	return nil
 }
 
@@ -451,6 +478,8 @@ func Main() {
 			projectPath = args[1]
 		}
 		switch args[0] {
+		case "help":
+			printHelp()
 		case "clean-content":
 			_, err := cleanContent(projectPath)
 			check(err)
