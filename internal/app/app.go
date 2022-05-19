@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/otiai10/copy"
 )
 
 type FileInfo struct {
@@ -22,12 +23,12 @@ var file_search_dict string
 
 func printHelp() {
 	fmt.Println(`Usage:
-	clean content: guides-cleaner clean-content <path>
-	clean assessments: guides-cleaner clean-assessments <path>
-	delete unused files in img\: guides-cleaner clean-images <path>
-	delete unused files in code\: guides-cleaner clean-code <path>
-	full clean: guides-cleaner clean-full <path>
-	<path> - path to the project`)
+	clean content: guides-cleaner clean-content <path_to_the_project>
+	clean assessments: guides-cleaner clean-assessments <path_to_the_project>
+	delete unused files in img\: guides-cleaner clean-images <path_to_the_project>
+	delete unused files in code\: guides-cleaner clean-code <path_to_the_project>
+	full clean: guides-cleaner clean-full <path_to_the_project>
+	merge assignments: guides-cleaner merge <destAssignmentPath> <mergeAssignmentPath>`)
 	os.Exit(1)
 }
 
@@ -45,8 +46,7 @@ func loadSections(path string) ([]Section, error) {
 	}
 	defer jsonFile.Close()
 
-	bytes, _ := ioutil.ReadAll(jsonFile)
-
+	bytes, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
 		return nil, err
 	}
@@ -67,24 +67,23 @@ func cleanAssessments(path string) error {
 	}
 	defer jsonFile.Close()
 
-	bytes, _ := ioutil.ReadAll(jsonFile)
-
+	bytes, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
 		return err
 	}
 	if err := json.Unmarshal(bytes, &root); err != nil {
-    	log.Fatal(err)
+    	return err
 	}
 	var dst []interface{}
 
 	for _, value := range root {
 		node, ok := value.(map[string]interface{})
 		if !ok {
-			log.Fatalf("Error clean assessment.json")
+			return fmt.Errorf("error clean assessment.json")
 		}
 		taskId, ok := node["taskId"].(string)
 		if !ok {
-			log.Fatal("Error fetch taskId")
+			return fmt.Errorf("error fetch taskId")
 		}
 		if (assessmentMap[taskId]) {
 			dst = append(dst, value)
@@ -92,11 +91,12 @@ func cleanAssessments(path string) error {
 	}
 	
 	data, err := json.MarshalIndent(dst, "", " ")
-	check(err)
+	if err != nil {
+		return err
+	}
 	jsonFile.Truncate(0)
 	jsonFile.Seek(0, 0)
 	jsonFile.Write(data)
-
 	return nil
 }
 
@@ -167,23 +167,33 @@ func checkFilesContent(rootPath string, paths []string, includeAssessments bool)
 	return nil
 }
 
-func checkDirectory(pathToDirectory string, includeAssessments bool) {
+func checkDirectory(pathToDirectory string, includeAssessments bool) error {
   files, err := ioutil.ReadDir(pathToDirectory)
   if err != nil {
-    log.Fatal(err)
+    return err
   }
   for _, file := range files {
     pathToFile := pathToDirectory + "/" + file.Name()
     if file.IsDir() {
-      checkDirectory(pathToFile, includeAssessments)
+      err = checkDirectory(pathToFile, includeAssessments)
+	  if err != nil {
+		return err
+	  }
     } else {
-      checkFile(pathToFile, includeAssessments)
+      err = checkFile(pathToFile, includeAssessments)
+	  if err != nil {
+		return err
+	  }
     }
   }
+  return nil
 }
 
-func checkFile(pathToFile string, includeAssessments bool) {
-	content := readFile(pathToFile)
+func checkFile(pathToFile string, includeAssessments bool) error {
+	content, err := readFile(pathToFile)
+	if err != nil {
+		return err
+	}
 
 	re := regexp.MustCompile(file_search_dict)
 	matches := re.FindAllString(content, -1)
@@ -201,14 +211,15 @@ func checkFile(pathToFile string, includeAssessments bool) {
 			assessmentMap[v[taskIdIndex]] = true
 		}
 	}
+	return nil
 }
 
-func readFile(pathToFile string) string {
+func readFile(pathToFile string) (string, error) {
 	data, err := ioutil.ReadFile(pathToFile)
 	if err != nil {
-	  log.Println(err)
+	  return "", err
 	}
-	return string(data)
+	return string(data), nil
   }
 
 func cleanContent(path string) (bool, error) {
@@ -237,6 +248,226 @@ func getCodePath(projectPath string) string {
 	return filepath.Join(projectPath, "../code")
 }
 
+func mergeAssignments(destAssignmentPath string, mergeAssignmentPath string) error {
+	err := mergeAssessmentsJson(destAssignmentPath, mergeAssignmentPath)
+	if err != nil {
+		return err
+	}
+	err = mergeJson(destAssignmentPath, mergeAssignmentPath, ".guides/metadata.json", "sections")
+	if err != nil {
+		return err
+	}
+	err = mergeJson(destAssignmentPath, mergeAssignmentPath, ".guides/book.json", "children")
+	if err != nil {
+		return err
+	}
+	err = copyFiles(destAssignmentPath, mergeAssignmentPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func copyFiles(destAssignmentPath string, mergeAssignmentPath string) error {
+	files, _ := getListFiles(destAssignmentPath)
+	excludeFiles := make(map[string]bool)
+	for _, item := range files {
+		excludeFiles[strings.Replace(item, destAssignmentPath, "", 1)] = true
+	}
+	copy.Copy(
+		mergeAssignmentPath,
+		destAssignmentPath,
+		copy.Options{
+			Skip: func(src string) (bool, error) {
+				relativPath := strings.Replace(src, mergeAssignmentPath, "", 1)
+				_, exists := excludeFiles[relativPath]
+				return exists, nil
+			},
+		},
+	)
+	return nil
+}
+
+func mergeAssessmentsJson(destAssignmentPath string, mergeAssignmentPath string) error {
+	relativPathToBook := ".guides/assessments.json"
+	var mergeJson []interface{}
+	mergeFilePath := filepath.Join(mergeAssignmentPath, relativPathToBook)
+	mergeFile, err := os.Open(mergeFilePath)
+	if err != nil {
+		return err
+	}
+	defer mergeFile.Close()
+
+	bytes, err := ioutil.ReadAll(mergeFile)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(bytes, &mergeJson); err != nil {
+    	return err
+	}
+
+	var dstJson []interface{}
+	dstFilePath := filepath.Join(destAssignmentPath, relativPathToBook)
+	dstFile, err := os.OpenFile(dstFilePath, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	bytes, err = ioutil.ReadAll(dstFile)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(bytes, &dstJson); err != nil {
+    	return err
+	}
+
+	dstIds := []string{}
+	for _, val := range dstJson {
+		node, ok := val.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("error processing file: %s", dstFilePath)
+		}
+		id, ok := node["taskId"].(string)
+		if ok {
+			dstIds = append(dstIds, id)
+		}
+	}
+
+	for _, val := range mergeJson {
+		node, ok := val.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("error processing file: %s", mergeFilePath)
+		}
+		id, ok := node["taskId"].(string)
+		if ok && !containedInArray(dstIds, id){
+			dstJson = append(dstJson, val)
+		}
+	}
+	
+	data, err := json.MarshalIndent(dstJson, "", " ")
+	if err != nil {
+		return err
+	}
+	dstFile.Truncate(0)
+	dstFile.Seek(0, 0)
+	dstFile.Write(data)
+	return nil
+}
+
+func mergeJson(destAssignmentPath, mergeAssignmentPath, relativPathToFile, processedRecord string) error {
+	pathToDest := filepath.Join(destAssignmentPath, relativPathToFile)
+	pathToMerge := filepath.Join(mergeAssignmentPath, relativPathToFile)
+	arr, err := getMergeArray(pathToMerge, processedRecord)
+	if err != nil {
+		return err
+	}
+	err = mergeIntoDst(pathToDest, processedRecord, arr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getMergeArray(pathToFile string, key string) ([]interface{}, error) {
+	var root interface{}
+	jsonFile, err := os.Open(pathToFile)
+	if err != nil {
+		return nil, err
+	}
+	defer jsonFile.Close()
+
+	bytes, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(bytes, &root); err != nil {
+    	return nil, err
+	}
+
+	records, ok := root.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("error processing file: %s", pathToFile)
+	}
+	out, ok := records[key].([]interface{})
+	if ok {
+		return out, nil
+	}
+
+	return []interface{}{}, nil
+}
+
+func mergeIntoDst(pathToFile string, key string, mergeArr []interface{}) error {
+	var root interface{}
+	jsonFile, err := os.OpenFile(pathToFile, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer jsonFile.Close()
+
+	bytes, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(bytes, &root); err != nil {
+    	return err
+	}
+
+	records, ok := root.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("error processing file: %s", pathToFile)
+	}
+
+	var srcRecord []interface{}
+	srcRecord, ok = records[key].([]interface{})
+	if !ok {
+		srcRecord = []interface{}{}
+	}
+
+	srcIds := []string{}
+	for _, val := range srcRecord {
+		node, ok := val.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("error processing file: %s", pathToFile)
+		}
+		id, ok := node["id"].(string)
+		if ok {
+			srcIds = append(srcIds, id)
+		}
+	}
+
+	for _, val := range mergeArr {
+		node, ok := val.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("error processing file: %s", pathToFile)
+		}
+		id, ok := node["id"].(string)
+		if ok && !containedInArray(srcIds, id){
+			srcRecord = append(srcRecord, val)
+		}
+	}
+
+	records[key] = srcRecord
+	
+	data, err := json.MarshalIndent(root, "", " ")
+	if err != nil {
+		return err
+	}
+	jsonFile.Truncate(0)
+	jsonFile.Seek(0, 0)
+	jsonFile.Write(data)
+	return nil
+}
+
+func containedInArray(array []string, value string) bool {
+	for _, n := range array {
+		if value == n {
+			return true
+		}
+	}
+	return false
+}
+
 func Main() {
 	args := os.Args[1:]
 	if len(args) == 0 {
@@ -247,6 +478,8 @@ func Main() {
 			projectPath = args[1]
 		}
 		switch args[0] {
+		case "help":
+			printHelp()
 		case "clean-content":
 			_, err := cleanContent(projectPath)
 			check(err)
@@ -274,6 +507,16 @@ func Main() {
 			check(err)
 			err = cleanFoldersByFileMap()
 			check(err)
+		case "merge":
+			if len(args) > 2 {
+				destAssignmentPath := args[1]
+				mergeAssignmentPath := args[2]
+				err := mergeAssignments(destAssignmentPath, mergeAssignmentPath)
+				check(err)
+			} else {
+				printHelp()
+			}
+
 		default:
 			printHelp()
 		}
