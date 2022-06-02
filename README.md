@@ -33,3 +33,7 @@
     ./guides-cleaner merge cs-intro-python-loops/ cs-intro-python-conditionals/
     ```
     Conditionals would be appended after the loops content
+
+    If you want to append content into the existing content (in `.guides`), set the <destAssignmentPath> to `./`.
+    
+    To move content into `.guides` (overwriting any existing content in `.guides`), set the <destAssignmentPath> to `.`.
