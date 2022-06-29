@@ -3,23 +3,29 @@
 ## Usage Overview
 `guides-cleaner clean-content <path_to_the_project>`
 
+## Inline installer
+
+```bash
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/codio/guides-cleaner/master/installer.sh)"
+```
+
 ## How to Use Guides Cleaner in Codio
 1. Download the linux binary (`content-checker-linux-amd64.tgz`) under [**Releases**](https://github.com/codio/guides-cleaner/releases)
-2. Drag-and-drop `content-checker-linux-amd64.tgz` into the Codio assignment or project filetree
+2. Drag-and-drop `guides-cleaner-linux-amd64.tgz` into the Codio assignment or project filetree
 3. In the Codio terminal, extract the binary:
     ```
-    tar zxf content-checker-linux-amd64.tgz
+    tar zxf guides-cleaner-linux-amd64.tgz
     ```
 4. In the Codio terminal, run the code:
     ```
     ./guides-cleaner clean-content
     ```
 ## How to Merge assingments in Codio
-1. Download the linux binary (`content-checker-linux-amd64.tgz`) under [**Releases**](https://github.com/codio/guides-cleaner/releases)
-2. Drag-and-drop `content-checker-linux-amd64.tgz` into the Codio assignment or project filetree
+1. Download the linux binary (`guides-cleaner-linux-amd64.tgz`) under [**Releases**](https://github.com/codio/guides-cleaner/releases)
+2. Drag-and-drop `guides-cleaner-linux-amd64.tgz` into the Codio assignment or project filetree
 3. In the Codio terminal, extract the binary:
     ```
-    tar zxf content-checker-linux-amd64.tgz
+    tar zxf guides-cleaner-linux-amd64.tgz
     ```
 4. Clone the two assingments you want to merge into Codio
 5. In the Codio terminal, run the code:
