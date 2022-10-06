@@ -40,6 +40,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/codio/guides-cleaner/maste
     ```
     Conditionals would be appended after the loops content
 
-    If you want to append content into the existing content (in `.guides`), set the <destAssignmentPath> to `./`.
+    If you want to append content into the existing content (in `.guides`), set the `<destAssignmentPath>` to `./`. Make sure your `<mergeAssignmentPath>` ends with a `/` or it will overwrite the content.
     
-    To move content into `.guides` (overwriting any existing content in `.guides`), set the <destAssignmentPath> to `.`.
+    To move content into `.guides` (overwriting any existing content in `.guides`), set the `<destAssignmentPath>` to `.`.
+
