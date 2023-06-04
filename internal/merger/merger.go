@@ -1,6 +1,7 @@
 package merger
 
 import (
+	"errors"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -9,9 +10,30 @@ import (
 
 	utils "github.com/codio/guides-cleaner/internal/utils"
 	filesUtils "github.com/codio/guides-cleaner/internal/utils/files"
+	versionChecker "github.com/codio/guides-cleaner/internal/utils/version-checker"
 )
 
 func MergeAssignments(destAssignmentPath, mergeAssignmentPath string) error {
+	destIsV3, err := versionChecker.IsV3(destAssignmentPath)
+	if err != nil {
+		return err
+	}
+	mergeIsV3, err := versionChecker.IsV3(mergeAssignmentPath)
+	if err != nil {
+		return err
+	}
+	if destIsV3 && mergeIsV3 {
+		mergeAssignmentsV3(destAssignmentPath, mergeAssignmentPath)
+		return nil
+	}
+	if !destIsV3 && !mergeIsV3 {
+		mergeAssignmentsV2(destAssignmentPath, mergeAssignmentPath)
+		return nil
+	}
+	return errors.New("Assignments have different structure versions")
+}
+
+func mergeAssignmentsV2(destAssignmentPath, mergeAssignmentPath string) error {
 	err := mergeAssessmentsJson(destAssignmentPath, mergeAssignmentPath)
 	if err != nil {
 		return err
@@ -24,7 +46,19 @@ func MergeAssignments(destAssignmentPath, mergeAssignmentPath string) error {
 	if err != nil {
 		return err
 	}
-	err = filesUtils.CopyFiles(destAssignmentPath, mergeAssignmentPath)
+	err = filesUtils.MergeDirectory(destAssignmentPath, mergeAssignmentPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func mergeAssignmentsV3(destAssignmentPath, mergeAssignmentPath string) error {
+	err := filesUtils.MergeDirectory(destAssignmentPath, mergeAssignmentPath)
+	if err != nil {
+		return err
+	}
+	err = mergeJson(destAssignmentPath, mergeAssignmentPath, ".guides/content/index.json", "order")
 	if err != nil {
 		return err
 	}

@@ -24,23 +24,29 @@ func GetListFiles(rootPath string) ([]string, error) {
 	return files, nil
 }
 
-func CopyFiles(destAssignmentPath, mergeAssignmentPath string) error {
-	files, _ := GetListFiles(destAssignmentPath)
+func MergeDirectory(destPath, mergePath string) error {
+	files, err := GetListFiles(destPath)
+	if err != nil {
+		return err
+	}
 	excludeFiles := make(map[string]bool)
 	for _, item := range files {
-		excludeFiles[strings.Replace(item, destAssignmentPath, "", 1)] = true
+		excludeFiles[strings.Replace(item, destPath, "", 1)] = true
 	}
-	copy.Copy(
-		mergeAssignmentPath,
-		destAssignmentPath,
+	err = copy.Copy(
+		mergePath,
+		destPath,
 		copy.Options{
 			Skip: func(src string) (bool, error) {
-				relativPath := strings.Replace(src, mergeAssignmentPath, "", 1)
+				relativPath := strings.Replace(src, mergePath, "", 1)
 				_, exists := excludeFiles[relativPath]
 				return exists, nil
 			},
 		},
 	)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -50,4 +56,15 @@ func ReadFile(pathToFile string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func PathIsExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
