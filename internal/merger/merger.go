@@ -58,12 +58,89 @@ func mergeAssignmentsV3(destAssignmentPath, mergeAssignmentPath string) error {
 	if err != nil {
 		return err
 	}
-	err = mergeJson(destAssignmentPath, mergeAssignmentPath, ".guides/content/index.json", "order")
+	err = mergeJsonV3(destAssignmentPath, mergeAssignmentPath, ".guides/content/index.json", "order")
 	if err != nil {
 		return err
 	}
 	return nil
 }
+
+func mergeJsonV3(destAssignmentPath, mergeAssignmentPath, relativPathToFile, processedRecord string) error {
+	pathToDest := filepath.Join(destAssignmentPath, relativPathToFile)
+	pathToMerge := filepath.Join(mergeAssignmentPath, relativPathToFile)
+	arr, err := getMergeArray(pathToMerge, processedRecord)
+	if err != nil {
+		return err
+	}
+	err = mergeIntoDstV3(pathToDest, processedRecord, arr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func mergeIntoDstV3(pathToFile, key string, mergeArr []interface{}) error {
+	var root interface{}
+	jsonFile, err := os.OpenFile(pathToFile, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer jsonFile.Close()
+
+	bytes, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(bytes, &root); err != nil {
+		return err
+	}
+
+	records, ok := root.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("error processing file: %s", pathToFile)
+	}
+
+	var srcRecord []interface{}
+	srcRecord, ok = records[key].([]interface{})
+	if !ok {
+		srcRecord = []interface{}{}
+	}
+
+	srcIds := []string{}
+	for _, val := range srcRecord {
+		node, ok := val.(string)
+		if !ok {
+			return fmt.Errorf("error processing file: %s", pathToFile)
+		}
+		// id, ok := node["id"].(string)
+		// if ok {
+		srcIds = append(srcIds, node)
+		// }
+	}
+
+	for _, val := range mergeArr {
+		// node, ok := val.(map[string]interface{})
+		// if !ok {
+		// 	return fmt.Errorf("error processing file: %s", pathToFile)
+		// }
+		// id, ok := node["id"].(string)
+		if ok && !utils.ContainedInArray(srcIds, val.(string)) {
+			srcRecord = append(srcRecord, val.(string))
+		}
+	}
+
+	records[key] = srcRecord
+
+	data, err := json.MarshalIndent(root, "", " ")
+	if err != nil {
+		return err
+	}
+	jsonFile.Truncate(0)
+	jsonFile.Seek(0, 0)
+	jsonFile.Write(data)
+	return nil
+}
+
 
 func mergeAssessmentsJson(destAssignmentPath, mergeAssignmentPath string) error {
 	relativPathToBook := ".guides/assessments.json"

@@ -61,6 +61,54 @@ func Clean(action, projectPath string) error {
 	return nil
 }
 
+////////// clean V3 //////////////
+
+func CleanV3(action, projectPath string) error {
+	switch action {
+	// case "clean-content":
+	// 	if err := cleanContent(projectPath); err != nil {
+	// 		return err
+	// 	}
+	case "clean-assessments":
+		if err := checkFilesContent(projectPath, []string{}, true); err != nil {
+			return err
+		}
+		if err := cleanAssessmentsV3(projectPath); err != nil { // is different
+			return err
+		}
+	case "clean-images":
+		if err := checkFilesContent(projectPath, []string{getImgPath(projectPath)}, false); err != nil {
+			return err
+		}
+		if err := cleanFoldersByFileMap(); err != nil {
+			return err
+		}
+	case "clean-code":
+		if err := checkFilesContent(projectPath, []string{getCodePath(projectPath)}, false); err != nil {
+			return err
+		}
+		if err := cleanFoldersByFileMap(); err != nil {
+			return err
+		}
+	// case "clean-full":
+	// 	if err := cleanContent(projectPath); err != nil {
+	// 		return err
+	// 	}
+	// 	if err := checkFilesContent(projectPath, []string{getImgPath(projectPath), getCodePath(projectPath)}, true); err != nil {
+	// 		return err
+	// 	}
+	// 	if err := cleanAssessments(projectPath); err != nil {
+	// 		return err
+	// 	}
+	// 	if err := cleanFoldersByFileMap(); err != nil {
+	// 		return err
+	// 	}
+	}
+	return nil
+}
+
+//////////////////////////////////
+
 func loadSections(path string) ([]types.Section, error) {
 	jsonFilePath := filepath.Join(path, "metadata.json")
 	jsonFile, err := os.Open(jsonFilePath)
@@ -123,6 +171,29 @@ func cleanAssessments(path string) error {
 	return nil
 }
 
+func cleanAssessmentsV3(path string) error {
+	files, err := filesUtils.GetListFiles(filepath.Join(path, "assessments"))
+	if err != nil {
+		return err
+	}
+
+	for _, filePath := range files {
+		file := filepath.Base(filePath)
+		fmt.Printf("File: %s\n", file)
+		taskId := strings.TrimRight(file, ".json")
+		_, exists := assessmentMap[taskId]
+		if !exists {
+			fmt.Printf("DELETING FILE!: %s\n", filePath)
+			err = os.Remove(filePath)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func cleanFoldersByFileMap() error {
 	for _, file := range fileMap {
 		if !file.NeedRemove {
@@ -137,7 +208,7 @@ func cleanFoldersByFileMap() error {
 	return nil
 }
 
-func cleanFolder(fileNames map[string]bool, path string) error {
+func cleanContentFolder(fileNames map[string]bool, path string) error {
 	files, err := filesUtils.GetListFiles(filepath.Join(path, "content"))
 	if err != nil {
 		return err
@@ -232,11 +303,15 @@ func cleanContent(path string) error {
 		sectionPaths[filepath.Base(item.ContentFile)] = true
 	}
 
-	err = cleanFolder(sectionPaths, path)
+	err = cleanContentFolder(sectionPaths, path)
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func cleanContentV3(path string) error {
 	return nil
 }
 
