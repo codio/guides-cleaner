@@ -12,8 +12,6 @@ func IsV3(assignmentPath string) (bool, error) {
 	if !strings.HasSuffix(assignmentPath, ".guides") {
 		assignmentPath = filepath.Join(assignmentPath, ".guides")
 	}
-	fmt.Println("assignmentPath")
-	fmt.Println(assignmentPath)
 	assessmentsIsV3, err := assessmentsIsV3(assignmentPath)
 	if err != nil {
 		return false, err
@@ -27,8 +25,6 @@ func IsV3(assignmentPath string) (bool, error) {
 
 func assessmentsIsV3(assignmentPath string) (bool, error) {
 	assessmentsDescriptionFile := filepath.Join(assignmentPath, "assessments.json")
-	fmt.Println("assessmentsDescriptionFile")
-	fmt.Println(assessmentsDescriptionFile)
 	assessmentsDescriptionIsExists, err := filesUtils.PathIsExists(assessmentsDescriptionFile)
 	if err != nil {
 		return false, err
