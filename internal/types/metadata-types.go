@@ -1,4 +1,4 @@
-package app
+package types
 
 type Metadata struct {
 	Sections []Section `json:"sections"`
