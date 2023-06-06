@@ -1,12 +1,19 @@
 package versionchecker
 
 import (
+	"fmt"
 	"path/filepath"
+	"strings"
 
 	filesUtils "github.com/codio/guides-cleaner/internal/utils/files"
 )
 
 func IsV3(assignmentPath string) (bool, error) {
+	if !strings.HasSuffix(assignmentPath, ".guides") {
+		assignmentPath = filepath.Join(assignmentPath, ".guides")
+	}
+	fmt.Println("assignmentPath")
+	fmt.Println(assignmentPath)
 	assessmentsIsV3, err := assessmentsIsV3(assignmentPath)
 	if err != nil {
 		return false, err
@@ -15,17 +22,18 @@ func IsV3(assignmentPath string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	// for default clean with path .guides not work now
 	return assessmentsIsV3 || contentIsV3, nil
 }
 
 func assessmentsIsV3(assignmentPath string) (bool, error) {
-	assessmentsDescriptionFile := filepath.Join(assignmentPath, ".guides/assessments.json")
+	assessmentsDescriptionFile := filepath.Join(assignmentPath, "assessments.json")
+	fmt.Println("assessmentsDescriptionFile")
+	fmt.Println(assessmentsDescriptionFile)
 	assessmentsDescriptionIsExists, err := filesUtils.PathIsExists(assessmentsDescriptionFile)
 	if err != nil {
 		return false, err
 	}
-	assessmentsDirectory := filepath.Join(assignmentPath, ".guides/assessments/")
+	assessmentsDirectory := filepath.Join(assignmentPath, "assessments")
 	hasConvertedAssessments := false
 	assessmentsDirectoryIsExists, err := filesUtils.PathIsExists(assessmentsDirectory)
 	if err != nil {
@@ -40,12 +48,12 @@ func assessmentsIsV3(assignmentPath string) (bool, error) {
 }
 
 func contentIsV3(assignmentPath string) (bool, error) {
-	guidesDescriptionFile := filepath.Join(assignmentPath, ".guides/metadata.json")
+	guidesDescriptionFile := filepath.Join(assignmentPath, "metadata.json")
 	descriptionFileExists, err := filesUtils.PathIsExists(guidesDescriptionFile)
 	if err != nil {
 		return false, err
 	}
-	guidesIndexFile := filepath.Join(assignmentPath, ".guides/content/index.json")
+	guidesIndexFile := filepath.Join(assignmentPath, "content/index.json")
 	indexFileExists, err := filesUtils.PathIsExists(guidesIndexFile)
 	if err != nil {
 		return false, err

@@ -3,14 +3,16 @@ package cleaner
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/codio/guides-cleaner/internal/types"
+	utils "github.com/codio/guides-cleaner/internal/utils"
 	filesUtils "github.com/codio/guides-cleaner/internal/utils/files"
+	versionChecker "github.com/codio/guides-cleaner/internal/utils/version-checker"
 )
 
 var fileMap = make(map[string]types.FileInfo)
@@ -18,16 +20,20 @@ var assessmentMap = make(map[string]bool)
 var file_search_dict string
 
 func Clean(action, projectPath string) error {
+	isV3, err := versionChecker.IsV3(projectPath)
+	if err != nil {
+		return err
+	}
 	switch action {
 	case "clean-content":
-		if err := cleanContent(projectPath); err != nil {
+		if err := cleanContent(projectPath, isV3); err != nil {
 			return err
 		}
 	case "clean-assessments":
 		if err := checkFilesContent(projectPath, []string{}, true); err != nil {
 			return err
 		}
-		if err := cleanAssessments(projectPath); err != nil {
+		if err := cleanAssessments(projectPath, isV3); err != nil {
 			return err
 		}
 	case "clean-images":
@@ -45,13 +51,13 @@ func Clean(action, projectPath string) error {
 			return err
 		}
 	case "clean-full":
-		if err := cleanContent(projectPath); err != nil {
+		if err := cleanContent(projectPath, isV3); err != nil {
 			return err
 		}
 		if err := checkFilesContent(projectPath, []string{getImgPath(projectPath), getCodePath(projectPath)}, true); err != nil {
 			return err
 		}
-		if err := cleanAssessments(projectPath); err != nil {
+		if err := cleanAssessments(projectPath, isV3); err != nil {
 			return err
 		}
 		if err := cleanFoldersByFileMap(); err != nil {
@@ -60,54 +66,6 @@ func Clean(action, projectPath string) error {
 	}
 	return nil
 }
-
-////////// clean V3 //////////////
-
-func CleanV3(action, projectPath string) error {
-	switch action {
-	// case "clean-content":
-	// 	if err := cleanContent(projectPath); err != nil {
-	// 		return err
-	// 	}
-	case "clean-assessments":
-		if err := checkFilesContent(projectPath, []string{}, true); err != nil {
-			return err
-		}
-		if err := cleanAssessmentsV3(projectPath); err != nil { // is different
-			return err
-		}
-	case "clean-images":
-		if err := checkFilesContent(projectPath, []string{getImgPath(projectPath)}, false); err != nil {
-			return err
-		}
-		if err := cleanFoldersByFileMap(); err != nil {
-			return err
-		}
-	case "clean-code":
-		if err := checkFilesContent(projectPath, []string{getCodePath(projectPath)}, false); err != nil {
-			return err
-		}
-		if err := cleanFoldersByFileMap(); err != nil {
-			return err
-		}
-	// case "clean-full":
-	// 	if err := cleanContent(projectPath); err != nil {
-	// 		return err
-	// 	}
-	// 	if err := checkFilesContent(projectPath, []string{getImgPath(projectPath), getCodePath(projectPath)}, true); err != nil {
-	// 		return err
-	// 	}
-	// 	if err := cleanAssessments(projectPath); err != nil {
-	// 		return err
-	// 	}
-	// 	if err := cleanFoldersByFileMap(); err != nil {
-	// 		return err
-	// 	}
-	}
-	return nil
-}
-
-//////////////////////////////////
 
 func loadSections(path string) ([]types.Section, error) {
 	jsonFilePath := filepath.Join(path, "metadata.json")
@@ -117,7 +75,7 @@ func loadSections(path string) ([]types.Section, error) {
 	}
 	defer jsonFile.Close()
 
-	bytes, err := ioutil.ReadAll(jsonFile)
+	bytes, err := io.ReadAll(jsonFile)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +87,10 @@ func loadSections(path string) ([]types.Section, error) {
 	return metadata.Sections, nil
 }
 
-func cleanAssessments(path string) error {
+func cleanAssessments(path string, isV3 bool) error {
+	if isV3 {
+		return cleanAssessmentsV3(path)
+	}
 	var root []interface{}
 	jsonFilePath := filepath.Join(path, "assessments.json")
 	jsonFile, err := os.OpenFile(jsonFilePath, os.O_RDWR, 0)
@@ -138,7 +99,7 @@ func cleanAssessments(path string) error {
 	}
 	defer jsonFile.Close()
 
-	bytes, err := ioutil.ReadAll(jsonFile)
+	bytes, err := io.ReadAll(jsonFile)
 	if err != nil {
 		return err
 	}
@@ -247,7 +208,7 @@ func checkFilesContent(rootPath string, paths []string, includeAssessments bool)
 }
 
 func checkDirectory(pathToDirectory string, includeAssessments bool) error {
-	files, err := ioutil.ReadDir(pathToDirectory)
+	files, err := os.ReadDir(pathToDirectory)
 	if err != nil {
 		return err
 	}
@@ -293,7 +254,10 @@ func checkFile(pathToFile string, includeAssessments bool) error {
 	return nil
 }
 
-func cleanContent(path string) error {
+func cleanContent(path string, isV3 bool) error {
+	if isV3 {
+		return cleanContentV3(path)
+	}
 	sections, err := loadSections(path)
 	if err != nil {
 		return err
@@ -312,6 +276,41 @@ func cleanContent(path string) error {
 }
 
 func cleanContentV3(path string) error {
+	pathToContent := filepath.Join(path, "content")
+	err := cleanContentFolderV3(pathToContent)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func cleanContentFolderV3(path string) error {
+	indexJson := filepath.Join(path, "index.json")
+	arr, err := utils.GetArrayFromJson[string](indexJson, "order")
+	arr = append(arr, "index")
+	if err != nil {
+		return err
+	}
+	files, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		pathToFile := filepath.Join(path, file.Name())
+		itemOrder := strings.TrimRight(file.Name(), ".json")
+		itemOrder = strings.TrimRight(itemOrder, ".md")
+		if !utils.ContainedInArray(arr, itemOrder) {
+			fmt.Printf("DELETING FILE!: %s\n", pathToFile)
+			err = os.Remove(pathToFile)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		if file.IsDir() {
+			cleanContentFolderV3(pathToFile)
+		}
+	}
 	return nil
 }
 

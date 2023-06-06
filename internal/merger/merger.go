@@ -1,10 +1,10 @@
 package merger
 
 import (
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -30,7 +30,7 @@ func MergeAssignments(destAssignmentPath, mergeAssignmentPath string) error {
 		mergeAssignmentsV2(destAssignmentPath, mergeAssignmentPath)
 		return nil
 	}
-	return errors.New("Assignments have different structure versions")
+	return errors.New("assignments have different structure versions")
 }
 
 func mergeAssignmentsV2(destAssignmentPath, mergeAssignmentPath string) error {
@@ -58,28 +58,28 @@ func mergeAssignmentsV3(destAssignmentPath, mergeAssignmentPath string) error {
 	if err != nil {
 		return err
 	}
-	err = mergeJsonV3(destAssignmentPath, mergeAssignmentPath, ".guides/content/index.json", "order")
+	err = mergeArraysOfJsons(destAssignmentPath, mergeAssignmentPath, ".guides/content/index.json", "order")
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func mergeJsonV3(destAssignmentPath, mergeAssignmentPath, relativPathToFile, processedRecord string) error {
+func mergeArraysOfJsons(destAssignmentPath, mergeAssignmentPath, relativPathToFile, processedRecord string) error {
 	pathToDest := filepath.Join(destAssignmentPath, relativPathToFile)
 	pathToMerge := filepath.Join(mergeAssignmentPath, relativPathToFile)
-	arr, err := getMergeArray(pathToMerge, processedRecord)
+	arr, err := utils.GetArrayFromJson[interface{}](pathToMerge, processedRecord)
 	if err != nil {
 		return err
 	}
-	err = mergeIntoDstV3(pathToDest, processedRecord, arr)
+	err = mergeArraysInto(pathToDest, processedRecord, arr)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func mergeIntoDstV3(pathToFile, key string, mergeArr []interface{}) error {
+func mergeArraysInto(pathToFile, key string, mergeArr []interface{}) error {
 	var root interface{}
 	jsonFile, err := os.OpenFile(pathToFile, os.O_RDWR, 0)
 	if err != nil {
@@ -87,7 +87,7 @@ func mergeIntoDstV3(pathToFile, key string, mergeArr []interface{}) error {
 	}
 	defer jsonFile.Close()
 
-	bytes, err := ioutil.ReadAll(jsonFile)
+	bytes, err := io.ReadAll(jsonFile)
 	if err != nil {
 		return err
 	}
@@ -106,29 +106,11 @@ func mergeIntoDstV3(pathToFile, key string, mergeArr []interface{}) error {
 		srcRecord = []interface{}{}
 	}
 
-	srcIds := []string{}
-	for _, val := range srcRecord {
-		node, ok := val.(string)
-		if !ok {
-			return fmt.Errorf("error processing file: %s", pathToFile)
-		}
-		// id, ok := node["id"].(string)
-		// if ok {
-		srcIds = append(srcIds, node)
-		// }
-	}
-
 	for _, val := range mergeArr {
-		// node, ok := val.(map[string]interface{})
-		// if !ok {
-		// 	return fmt.Errorf("error processing file: %s", pathToFile)
-		// }
-		// id, ok := node["id"].(string)
-		if ok && !utils.ContainedInArray(srcIds, val.(string)) {
-			srcRecord = append(srcRecord, val.(string))
+		if !utils.ContainedInArray(srcRecord, val) {
+			srcRecord = append(srcRecord, val)
 		}
 	}
-
 	records[key] = srcRecord
 
 	data, err := json.MarshalIndent(root, "", " ")
@@ -141,7 +123,6 @@ func mergeIntoDstV3(pathToFile, key string, mergeArr []interface{}) error {
 	return nil
 }
 
-
 func mergeAssessmentsJson(destAssignmentPath, mergeAssignmentPath string) error {
 	relativPathToBook := ".guides/assessments.json"
 	var mergeJson []interface{}
@@ -152,7 +133,7 @@ func mergeAssessmentsJson(destAssignmentPath, mergeAssignmentPath string) error 
 	}
 	defer mergeFile.Close()
 
-	bytes, err := ioutil.ReadAll(mergeFile)
+	bytes, err := io.ReadAll(mergeFile)
 	if err != nil {
 		return err
 	}
@@ -168,7 +149,7 @@ func mergeAssessmentsJson(destAssignmentPath, mergeAssignmentPath string) error 
 	}
 	defer dstFile.Close()
 
-	bytes, err = ioutil.ReadAll(dstFile)
+	bytes, err = io.ReadAll(dstFile)
 	if err != nil {
 		return err
 	}
@@ -212,46 +193,18 @@ func mergeAssessmentsJson(destAssignmentPath, mergeAssignmentPath string) error 
 func mergeJson(destAssignmentPath, mergeAssignmentPath, relativPathToFile, processedRecord string) error {
 	pathToDest := filepath.Join(destAssignmentPath, relativPathToFile)
 	pathToMerge := filepath.Join(mergeAssignmentPath, relativPathToFile)
-	arr, err := getMergeArray(pathToMerge, processedRecord)
+	arr, err := utils.GetArrayFromJson[interface{}](pathToMerge, processedRecord)
 	if err != nil {
 		return err
 	}
-	err = mergeIntoDst(pathToDest, processedRecord, arr)
+	err = mergeJsonInto(pathToDest, processedRecord, arr)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func getMergeArray(pathToFile, key string) ([]interface{}, error) {
-	var root interface{}
-	jsonFile, err := os.Open(pathToFile)
-	if err != nil {
-		return nil, err
-	}
-	defer jsonFile.Close()
-
-	bytes, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(bytes, &root); err != nil {
-		return nil, err
-	}
-
-	records, ok := root.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("error processing file: %s", pathToFile)
-	}
-	out, ok := records[key].([]interface{})
-	if ok {
-		return out, nil
-	}
-
-	return []interface{}{}, nil
-}
-
-func mergeIntoDst(pathToFile, key string, mergeArr []interface{}) error {
+func mergeJsonInto(pathToFile, key string, mergeArr []interface{}) error {
 	var root interface{}
 	jsonFile, err := os.OpenFile(pathToFile, os.O_RDWR, 0)
 	if err != nil {
@@ -259,7 +212,7 @@ func mergeIntoDst(pathToFile, key string, mergeArr []interface{}) error {
 	}
 	defer jsonFile.Close()
 
-	bytes, err := ioutil.ReadAll(jsonFile)
+	bytes, err := io.ReadAll(jsonFile)
 	if err != nil {
 		return err
 	}
