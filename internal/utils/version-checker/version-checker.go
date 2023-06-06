@@ -1,7 +1,6 @@
 package versionchecker
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
