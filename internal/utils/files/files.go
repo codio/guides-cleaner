@@ -1,7 +1,6 @@
 package files
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,7 +50,7 @@ func MergeDirectory(destPath, mergePath string) error {
 }
 
 func ReadFile(pathToFile string) (string, error) {
-	data, err := ioutil.ReadFile(pathToFile)
+	data, err := os.ReadFile(pathToFile)
 	if err != nil {
 		return "", err
 	}

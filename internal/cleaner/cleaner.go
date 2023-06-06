@@ -93,6 +93,14 @@ func cleanAssessments(path string, isV3 bool) error {
 	}
 	var root []interface{}
 	jsonFilePath := filepath.Join(path, "assessments.json")
+	jsonIsExists, err := filesUtils.PathIsExists(jsonFilePath)
+	if err != nil {
+		return err
+	}
+	if !jsonIsExists {
+		return nil
+	}
+
 	jsonFile, err := os.OpenFile(jsonFilePath, os.O_RDWR, 0)
 	if err != nil {
 		return err
@@ -133,7 +141,15 @@ func cleanAssessments(path string, isV3 bool) error {
 }
 
 func cleanAssessmentsV3(path string) error {
-	files, err := filesUtils.GetListFiles(filepath.Join(path, "assessments"))
+	assessmentsPath := filepath.Join(path, "assessments")
+	assessmentsPathIsExists, err := filesUtils.PathIsExists(assessmentsPath)
+	if err != nil {
+		return err
+	}
+	if !assessmentsPathIsExists {
+		return nil
+	}
+	files, err := filesUtils.GetListFiles(assessmentsPath)
 	if err != nil {
 		return err
 	}
@@ -170,7 +186,15 @@ func cleanFoldersByFileMap() error {
 }
 
 func cleanContentFolder(fileNames map[string]bool, path string) error {
-	files, err := filesUtils.GetListFiles(filepath.Join(path, "content"))
+	contentPath := filepath.Join(path, "content")
+	contentPathIsExists, err := filesUtils.PathIsExists(contentPath)
+	if err != nil {
+		return err
+	}
+	if !contentPathIsExists {
+		return nil
+	}
+	files, err := filesUtils.GetListFiles(contentPath)
 	if err != nil {
 		return err
 	}
@@ -192,6 +216,13 @@ func cleanContentFolder(fileNames map[string]bool, path string) error {
 
 func checkFilesContent(rootPath string, paths []string, includeAssessments bool) error {
 	for _, path := range paths {
+		pathIsExists, err := filesUtils.PathIsExists(path)
+		if err != nil {
+			return err
+		}
+		if !pathIsExists {
+			continue
+		}
 		files, err := filesUtils.GetListFiles(path)
 		if err != nil {
 			return err
